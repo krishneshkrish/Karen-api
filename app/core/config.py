@@ -14,6 +14,11 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     debug: bool = False
     environment: str = "production"  # development | production
+    allowed_origins: list[str] = [
+        "http://localhost:5173",
+        "http://localhost:5180",
+        "https://karen-app.vercel.app",
+    ]
 
     # Security
     secret_key: str                        # Used for HMAC user ID hashing
@@ -27,7 +32,7 @@ class Settings(BaseSettings):
 
     # Gemini
     gemini_api_key: str
-    gemini_model: str = "gemini-2.0-flash"
+    gemini_model: str = "gemini-3.6-flash"
 
     # ML Models (loaded lazily on first request)
     emotion_model_name: str = "j-hartmann/emotion-english-distilroberta-base"

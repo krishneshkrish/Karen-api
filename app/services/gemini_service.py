@@ -132,6 +132,14 @@ async def generate_session_summary(messages: list[dict], context: dict) -> dict:
         f"{m['role'].upper()}: {m['content']}" for m in messages
     )
 
+    raw_arc = context.get('emotion_arc', [])
+    formatted_arc = []
+    for item in raw_arc:
+        if isinstance(item, dict):
+            formatted_arc.append(str(item.get("emotion", item)))
+        else:
+            formatted_arc.append(str(item))
+
     prompt = f"""
 You are summarising a support conversation for a structured report.
 The user may share this report with a therapist or counsellor.
@@ -141,7 +149,7 @@ Conversation:
 
 Session context:
 - Primary topic: {context.get('topic', 'not identified')}
-- Emotion arc: {', '.join(context.get('emotion_arc', []))}
+- Emotion arc: {', '.join(formatted_arc)}
 - Final severity: {context.get('final_severity', 'low')}
 
 Return ONLY a valid JSON object with these exact keys:

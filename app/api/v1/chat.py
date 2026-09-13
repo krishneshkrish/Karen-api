@@ -57,11 +57,13 @@ async def send_message(
     # ── Gemini ────────────────────────────────────────────────────────────────
     karen_response = await get_karen_response(payload.messages, ml_signals)
 
+    session_id = payload.session_id or str(uuid.uuid4())
+
     # ── Persist session metadata to Supabase (no transcript) ─────────────────
     db = get_supabase()
     try:
         db.table("session_turns").insert({
-            "session_id": payload.session_id,
+            "session_id": session_id,
             "user_hash": user_hash,
             "dominant_emotion": emotion_result["dominant_emotion"],
             "severity": severity_result["severity"],
@@ -83,7 +85,7 @@ async def send_message(
         ),
         escalate=ml_signals["escalate"],
         crisis=ml_signals["crisis"],
-        session_id=payload.session_id,
+        session_id=session_id,
     )
 
 

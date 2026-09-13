@@ -8,7 +8,7 @@ class Message(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    session_id: str
+    session_id: Optional[str] = None
     messages: List[Message]
     is_first_message: bool = False
 

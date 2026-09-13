@@ -6,3 +6,7 @@ __pycache__/
 venv/
 *.egg-info/
 .DS_Store
+testsprite_tests/tmp/
+testsprite_tests/tmp/config.json
+*.db
+karen_local.db

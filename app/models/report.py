@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Any
 
 
 class ReportSection(BaseModel):
@@ -15,7 +15,7 @@ class ReportRequest(BaseModel):
     session_id: str
     messages: List[dict]
     topic: Optional[str] = None
-    emotion_arc: List[str] = []
+    emotion_arc: List[Any] = []
     final_severity: str = "low"
 
 
