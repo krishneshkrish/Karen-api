@@ -1,3 +1,4 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 
@@ -18,7 +19,24 @@ class Settings(BaseSettings):
         "http://localhost:5173",
         "http://localhost:5180",
         "https://karen-app.vercel.app",
+        "https://karen-web-seven.vercel.app",
     ]
+
+    @field_validator("allowed_origins", mode="before")
+    @classmethod
+    def assemble_cors_origins(cls, v: str | list[str]) -> list[str]:
+        if isinstance(v, str):
+            v = v.strip()
+            if v.startswith("[") and v.endswith("]"):
+                import json
+                try:
+                    return json.loads(v)
+                except Exception:
+                    pass
+            return [i.strip() for i in v.split(",") if i.strip()]
+        elif isinstance(v, list):
+            return v
+        return []
 
     # Security
     secret_key: str                        # Used for HMAC user ID hashing

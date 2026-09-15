@@ -44,11 +44,8 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 # ── CORS ──────────────────────────────────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://localhost:5180",            # SvelteKit dev
-        "https://karen-app.vercel.app",     # Production frontend (update this)
-    ],
+    allow_origins=settings.allowed_origins,
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -63,12 +60,12 @@ app.include_router(report.router,  prefix="/api/v1")
 
 
 # ── Health check (used by keep-alive ping) ────────────────────────────────────
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 async def health():
     return {"status": "ok", "service": settings.app_name}
 
 
 # ── Root ──────────────────────────────────────────────────────────────────────
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 async def root():
     return {"message": "Karen API is running"}
