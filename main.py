@@ -45,7 +45,8 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:5173",            # SvelteKit dev
+        "http://localhost:5173",
+        "http://localhost:5180",            # SvelteKit dev
         "https://karen-app.vercel.app",     # Production frontend (update this)
     ],
     allow_credentials=True,
