@@ -11,16 +11,19 @@ _emotion_pipeline = None
 def _get_pipeline():
     global _emotion_pipeline
     if _emotion_pipeline is None:
-        logger.info(f"Loading emotion model: {settings.emotion_model_name}")
-        _emotion_pipeline = pipeline(
-            "text-classification",
-            model=settings.emotion_model_name,
-            top_k=None,                    # Return all emotion scores
-            device=-1,                     # CPU (Render free tier has no GPU)
-        )
-        logger.info("Emotion model loaded")
+        try:
+            logger.info(f"Loading emotion model: {settings.emotion_model_name}")
+            _emotion_pipeline = pipeline(
+                "text-classification",
+                model=settings.emotion_model_name,
+                top_k=None,                    # Return all emotion scores
+                device=-1,                     # CPU (Render free tier has no GPU)
+            )
+            logger.info("Emotion model loaded")
+        except Exception as e:
+            logger.warning(f"Could not load emotion model ({e}). Using heuristic fallback.")
+            return None
     return _emotion_pipeline
-
 
 
 # Words that pattern-match to "surprise" in distilroberta but are
@@ -55,7 +58,7 @@ def _remap_surprise(text: str, scores: dict) -> str:
 
 def analyse_emotion(text: str) -> dict:
     """
-    Returns dominant emotion and all scores.
+    Returns dominant emotion and all scores with heuristic fallback.
 
     Output example:
     {
@@ -67,12 +70,29 @@ def analyse_emotion(text: str) -> dict:
         }
     }
     """
-    pipe = _get_pipeline()
+    try:
+        pipe = _get_pipeline()
+        if pipe is not None:
+            results = pipe(text[:512])[0]          # Truncate to 512 tokens
+            scores = {r["label"].lower(): round(r["score"], 4) for r in results}
+            dominant = _remap_surprise(text, scores)
+            return {"dominant_emotion": dominant, "scores": scores}
+    except Exception as e:
+        logger.warning(f"Emotion classification failed: {e}")
 
-    # Model returns list of [{"label": ..., "score": ...}]
-    results = pipe(text[:512])[0]          # Truncate to 512 tokens
+    # Heuristic fallback based on common distress words
+    lower = text.lower()
+    fallback_emotion = "neutral"
+    if any(w in lower for w in ["sad", "crying", "depressed", "hurt", "grief", "loss", "pain"]):
+        fallback_emotion = "sadness"
+    elif any(w in lower for w in ["anxious", "scared", "fear", "worried", "panic", "stress"]):
+        fallback_emotion = "fear"
+    elif any(w in lower for w in ["angry", "furious", "mad", "hate", "irritated"]):
+        fallback_emotion = "anger"
+    elif any(w in lower for w in ["happy", "glad", "relief", "better", "joy"]):
+        fallback_emotion = "joy"
 
-    scores = {r["label"].lower(): round(r["score"], 4) for r in results}
-    dominant = _remap_surprise(text, scores)
-
-    return {"dominant_emotion": dominant, "scores": scores}
+    return {
+        "dominant_emotion": fallback_emotion,
+        "scores": {fallback_emotion: 0.8, "neutral": 0.2}
+    }

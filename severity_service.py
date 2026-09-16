@@ -17,22 +17,32 @@ LABEL_MAP = {
 }
 
 
+CRISIS_KEYWORDS = [
+    "suicide", "kill myself", "end my life", "end it all", "want to die",
+    "hang myself", "cut myself", "self harm", "self-harm", "harm myself",
+]
+
+
 def _get_pipeline():
     global _zeroshot_pipeline
     if _zeroshot_pipeline is None:
-        logger.info(f"Loading zero-shot model: {settings.zeroshot_model_name}")
-        _zeroshot_pipeline = pipeline(
-            "zero-shot-classification",
-            model=settings.zeroshot_model_name,
-            device=-1,
-        )
-        logger.info("Zero-shot model loaded")
+        try:
+            logger.info(f"Loading zero-shot model: {settings.zeroshot_model_name}")
+            _zeroshot_pipeline = pipeline(
+                "zero-shot-classification",
+                model=settings.zeroshot_model_name,
+                device=-1,
+            )
+            logger.info("Zero-shot model loaded")
+        except Exception as e:
+            logger.warning(f"Could not load zero-shot model ({e}). Using heuristic fallback.")
+            return None
     return _zeroshot_pipeline
 
 
 def analyse_severity(text: str) -> dict:
     """
-    Classifies emotional severity using zero-shot NLI.
+    Classifies emotional severity using zero-shot NLI with heuristic fallback.
 
     Output example:
     {
@@ -42,17 +52,36 @@ def analyse_severity(text: str) -> dict:
         "crisis": False
     }
     """
-    pipe = _get_pipeline()
-    result = pipe(text[:512], candidate_labels=SEVERITY_LABELS)
+    lower = text.lower()
+    if any(kw in lower for kw in CRISIS_KEYWORDS):
+        return {
+            "severity": "crisis",
+            "score": 0.95,
+            "escalate": True,
+            "crisis": True,
+        }
 
-    # result["labels"] is sorted by score descending
-    top_label = result["labels"][0]
-    top_score = round(result["scores"][0], 4)
-    severity = LABEL_MAP[top_label]
+    try:
+        pipe = _get_pipeline()
+        if pipe is not None:
+            result = pipe(text[:512], candidate_labels=SEVERITY_LABELS)
+            top_label = result["labels"][0]
+            top_score = round(result["scores"][0], 4)
+            severity = LABEL_MAP[top_label]
 
+            return {
+                "severity": severity,
+                "score": top_score,
+                "escalate": top_score >= settings.severity_escalate_threshold and severity in ("high", "crisis"),
+                "crisis": severity == "crisis" and top_score >= settings.severity_crisis_threshold,
+            }
+    except Exception as e:
+        logger.warning(f"Zero-shot severity classification failed: {e}")
+
+    # Safe heuristic fallback
     return {
-        "severity": severity,
-        "score": top_score,
-        "escalate": top_score >= settings.severity_escalate_threshold and severity in ("high", "crisis"),
-        "crisis": severity == "crisis" and top_score >= settings.severity_crisis_threshold,
+        "severity": "low",
+        "score": 0.2,
+        "escalate": False,
+        "crisis": False,
     }

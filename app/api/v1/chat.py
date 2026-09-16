@@ -37,12 +37,25 @@ async def send_message(
         raise HTTPException(status_code=400, detail="No user message found")
 
     # ── ML Pipeline ───────────────────────────────────────────────────────────
-    emotion_result = analyse_emotion(last_user_msg)
-    severity_result = analyse_severity(last_user_msg)
+    try:
+        emotion_result = analyse_emotion(last_user_msg)
+    except Exception as e:
+        logger.warning(f"Emotion analysis failed, using fallback: {e}")
+        emotion_result = {"dominant_emotion": "neutral", "scores": {"neutral": 1.0}}
+
+    try:
+        severity_result = analyse_severity(last_user_msg)
+    except Exception as e:
+        logger.warning(f"Severity analysis failed, using fallback: {e}")
+        severity_result = {"severity": "low", "score": 0.2, "escalate": False, "crisis": False}
 
     topic_result = None
     if payload.is_first_message:
-        topic_result = analyse_topic(last_user_msg)
+        try:
+            topic_result = analyse_topic(last_user_msg)
+        except Exception as e:
+            logger.warning(f"Topic analysis failed, using fallback: {e}")
+            topic_result = {"topic": "general support", "score": 0.5}
 
     ml_signals = {
         "dominant_emotion": emotion_result["dominant_emotion"],
