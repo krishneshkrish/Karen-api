@@ -1,4 +1,3 @@
-from transformers import pipeline
 from app.core.config import settings
 import logging
 
@@ -12,6 +11,7 @@ def _get_pipeline():
     global _emotion_pipeline
     if _emotion_pipeline is None:
         try:
+            from transformers import pipeline
             logger.info(f"Loading emotion model: {settings.emotion_model_name}")
             _emotion_pipeline = pipeline(
                 "text-classification",

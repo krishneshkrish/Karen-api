@@ -1,4 +1,3 @@
-from transformers import pipeline
 from app.core.config import settings
 import logging
 
@@ -25,6 +24,7 @@ def _get_pipeline():
     global _zeroshot_pipeline
     if _zeroshot_pipeline is None:
         try:
+            from transformers import pipeline
             logger.info(f"Loading zero-shot model for topics: {settings.zeroshot_model_name}")
             _zeroshot_pipeline = pipeline(
                 "zero-shot-classification",
