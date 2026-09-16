@@ -1,58 +1,41 @@
-from app.core.config import settings
 import logging
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
-
-_zeroshot_pipeline = None
-
-SEVERITY_LABELS = ["low distress", "moderate distress", "high distress", "crisis"]
-
-# Map label → normalized key
-LABEL_MAP = {
-    "low distress": "low",
-    "moderate distress": "moderate",
-    "high distress": "high",
-    "crisis": "crisis",
-}
-
 
 CRISIS_KEYWORDS = [
     "suicide", "kill myself", "end my life", "end it all", "want to die",
     "hang myself", "cut myself", "self harm", "self-harm", "harm myself",
+    "take all my pills", "better off dead", "don't want to live", "dont want to live",
 ]
 
+HIGH_DISTRESS_KEYWORDS = [
+    "break down", "breaking down", "falling apart", "cannot take this", "cant take this",
+    "can't take this anymore", "cant do this anymore", "unbearable", "hopeless",
+    "panic attack", "disturbed", "severe", "trauma", "agony", "suffering",
+    "terrified", "paralyzed", "freaking out", "drowning",
+]
 
-def _get_pipeline():
-    global _zeroshot_pipeline
-    if _zeroshot_pipeline is None:
-        try:
-            from transformers import pipeline
-            logger.info(f"Loading zero-shot model: {settings.zeroshot_model_name}")
-            _zeroshot_pipeline = pipeline(
-                "zero-shot-classification",
-                model=settings.zeroshot_model_name,
-                device=-1,
-            )
-            logger.info("Zero-shot model loaded")
-        except Exception as e:
-            logger.warning(f"Could not load zero-shot model ({e}). Using heuristic fallback.")
-            return None
-    return _zeroshot_pipeline
+MODERATE_DISTRESS_KEYWORDS = [
+    "stressed", "stress", "anxious", "anxiety", "worried", "worry", "overwhelmed",
+    "depressed", "sad", "crying", "lonely", "exhausted", "tired", "not ok", "not okay",
+    "struggling", "hard time", "hurting", "lost", "confused", "in pain",
+]
 
 
 def analyse_severity(text: str) -> dict:
     """
-    Classifies emotional severity using zero-shot NLI with heuristic fallback.
-
+    Classifies emotional severity.
     Output example:
     {
         "severity": "high",
-        "score": 0.74,
+        "score": 0.75,
         "escalate": True,
         "crisis": False
     }
     """
     lower = text.lower()
+
     if any(kw in lower for kw in CRISIS_KEYWORDS):
         return {
             "severity": "crisis",
@@ -61,27 +44,25 @@ def analyse_severity(text: str) -> dict:
             "crisis": True,
         }
 
-    try:
-        pipe = _get_pipeline()
-        if pipe is not None:
-            result = pipe(text[:512], candidate_labels=SEVERITY_LABELS)
-            top_label = result["labels"][0]
-            top_score = round(result["scores"][0], 4)
-            severity = LABEL_MAP[top_label]
+    if any(kw in lower for kw in HIGH_DISTRESS_KEYWORDS):
+        return {
+            "severity": "high",
+            "score": 0.75,
+            "escalate": True,
+            "crisis": False,
+        }
 
-            return {
-                "severity": severity,
-                "score": top_score,
-                "escalate": top_score >= settings.severity_escalate_threshold and severity in ("high", "crisis"),
-                "crisis": severity == "crisis" and top_score >= settings.severity_crisis_threshold,
-            }
-    except Exception as e:
-        logger.warning(f"Zero-shot severity classification failed: {e}")
+    if any(kw in lower for kw in MODERATE_DISTRESS_KEYWORDS):
+        return {
+            "severity": "moderate",
+            "score": 0.50,
+            "escalate": False,
+            "crisis": False,
+        }
 
-    # Safe heuristic fallback
     return {
         "severity": "low",
-        "score": 0.2,
+        "score": 0.15,
         "escalate": False,
         "crisis": False,
     }
