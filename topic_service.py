@@ -1,7 +1,24 @@
 import logging
+import httpx
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+HF_ROUTER_URL = f"https://router.huggingface.co/hf-inference/models/{settings.zeroshot_model_name}"
+HF_LEGACY_URL = f"https://api-inference.huggingface.co/models/{settings.zeroshot_model_name}"
+
+TOPIC_CANDIDATES = [
+    "work stress",
+    "relationship issues",
+    "grief and loss",
+    "anxiety",
+    "loneliness",
+    "self-worth and confidence",
+    "family conflict",
+    "existential concerns",
+    "burnout",
+    "life transition"
+]
 
 TOPIC_KEYWORDS = {
     "work stress": [
@@ -48,15 +65,55 @@ TOPIC_KEYWORDS = {
 }
 
 
+def _query_hf_topic(text: str) -> dict | None:
+    token = settings.huggingface_api_token
+    if not token:
+        return None
+
+    headers = {"Authorization": f"Bearer {token}"}
+    payload = {
+        "inputs": text,
+        "parameters": {
+            "candidate_labels": TOPIC_CANDIDATES
+        }
+    }
+
+    for url in [HF_ROUTER_URL, HF_LEGACY_URL]:
+        try:
+            with httpx.Client(timeout=4.0) as client:
+                res = client.post(url, json=payload, headers=headers)
+                if res.status_code == 200:
+                    data = res.json()
+                    if "labels" in data and "scores" in data and len(data["labels"]) > 0:
+                        top_topic = data["labels"][0]
+                        top_score = round(data["scores"][0], 4)
+                        logger.info(f"Hugging Face BART detected topic: {top_topic} ({top_score})")
+                        return {
+                            "topic": top_topic,
+                            "score": top_score,
+                        }
+                elif res.status_code == 503:
+                    logger.warning(f"HF model {settings.zeroshot_model_name} is loading: {res.text[:100]}")
+                else:
+                    logger.debug(f"HF topic status {res.status_code}: {res.text[:100]}")
+        except Exception as e:
+            logger.debug(f"HF topic call error to {url}: {e}")
+
+    return None
+
+
 def analyse_topic(text: str) -> dict:
     """
     Identifies the primary concern domain from the first message.
-    Output example:
-    {
-        "topic": "work stress",
-        "score": 0.80
-    }
+    Uses Hugging Face Serverless Inference (BART Zero-Shot) when configured,
+    with local keyword fallback for reliability.
     """
+    # 1. Attempt Hugging Face Serverless Inference
+    hf_result = _query_hf_topic(text)
+    if hf_result:
+        return hf_result
+
+    # 2. Local keyword fallback
     lower = text.lower()
     scores = {}
 

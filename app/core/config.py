@@ -52,9 +52,16 @@ class Settings(BaseSettings):
     gemini_api_key: str
     gemini_model: str = "gemini-3.6-flash"
 
-    # ML Models (loaded lazily on first request)
+    # ML Models & Hugging Face Serverless Inference
+    huggingface_api_token: str = ""
     emotion_model_name: str = "j-hartmann/emotion-english-distilroberta-base"
     zeroshot_model_name: str = "facebook/bart-large-mnli"
+
+    @field_validator("huggingface_api_token", mode="before")
+    @classmethod
+    def assemble_hf_token(cls, v: str | None) -> str:
+        import os
+        return v or os.getenv("HUGGINGFACE_API_KEY") or os.getenv("HF_TOKEN") or ""
 
     # Rate limiting
     rate_limit_per_minute: int = 10        # Matches Gemini free tier RPM

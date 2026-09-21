@@ -141,38 +141,73 @@ async def generate_session_summary(messages: list[dict], context: dict) -> dict:
             formatted_arc.append(str(item))
 
     prompt = f"""
-You are summarising a support conversation for a structured report.
-The user may share this report with a therapist or counsellor.
+You are an expert Clinical Psychologist and Psychiatric Assessor preparing a comprehensive Clinical Intake & Psychological Trajectory Report based on a mental health conversation.
+This clinical document will be reviewed by an attending psychologist, psychiatrist, or clinical counsellor to evaluate the client's psychological history, diagnostic impressions, and treatment trajectory.
 
-Conversation:
+Conversation Transcript:
 {transcript_text}
 
-Session context:
-- Primary topic: {context.get('topic', 'not identified')}
-- Emotion arc: {', '.join(formatted_arc)}
-- Final severity: {context.get('final_severity', 'low')}
+Session Context & Biomarkers:
+- Primary Topic Identified: {context.get('topic', 'Not specified')}
+- Emotion Trajectory Arc: {', '.join(formatted_arc) if formatted_arc else 'Not recorded'}
+- Session Final Severity Tier: {context.get('final_severity', 'low')}
 
 Return ONLY a valid JSON object with these exact keys:
 {{
   "presenting_concern": "...",
+  "client_story": "...",
   "emotional_tone": "...",
+  "mental_status_observations": "...",
+  "longitudinal_trajectory": [
+    "Stage 1 (Initial Presentation): ...",
+    "Stage 2 (Distress & Exploration): ...",
+    "Stage 3 (Grounding & De-escalation): ..."
+  ],
   "key_themes": ["...", "..."],
   "directions_given": ["...", "..."],
-  "risk_flags": ["..." or empty list],
+  "risk_flags": ["..."],
+  "risk_assessment_tier": "Low | Moderate | High | Crisis",
+  "clinician_notes": "...",
   "recommendation": "..."
 }}
 
-Rules:
-- presenting_concern: 2-3 sentences summarising what the user came with
-- emotional_tone: describe how the user's emotional state shifted through the session
-- key_themes: list of 2-4 recurring themes
-- directions_given: what Karen suggested the user consider or try
-- risk_flags: any language suggesting self-harm, hopelessness, or crisis (be specific but careful)
-- recommendation: whether professional support was suggested and why
-- No markdown. No extra keys. Valid JSON only.
+Clinical Guidelines for each field:
+- presenting_concern: A concise clinical chief complaint (2-3 sentences) detailing the presenting issue and acute psychosocial stressors.
+- client_story: The comprehensive chronological narrative ("the user's whole story"). Detail the background circumstances, interpersonal conflicts, work or family dynamics, what burden the client carried, and how the crisis or distress evolved. Write with clinical depth and empathy.
+- emotional_tone: Affective assessment detailing the client's emotional range, baseline distress, emotional reactivity, and shifts observed across the session.
+- mental_status_observations: Clinical observations on thought process (e.g. linear, circumstantial, ruminative), cognitive distortions noted (e.g. catastrophizing, all-or-nothing thinking, imposter feelings), and coping mechanisms.
+- longitudinal_trajectory: A list of 3-5 chronological stages tracing the turn-by-turn progression of emotions and severity from beginning to end.
+- key_themes: List of 3-5 core psychological themes (e.g. "Workplace Burnout & Chronic Overwhelm", "Attachment Insecurity", "Somatic Exhaustion").
+- directions_given: Specific psychoeducational strategies, somatic grounding, or cognitive reframing techniques explored during the session.
+- risk_flags: Explicit clinical flags concerning self-harm, passive/active suicidal ideation, severe hopelessness, or medical instability (or an empty list [] if none noted).
+- risk_assessment_tier: One of "Low", "Moderate", "High", or "Crisis".
+- clinician_notes: Specific clinical impressions for the treating psychologist or psychiatrist: suggested therapeutic modalities (e.g. CBT, ACT, Psychodynamic), key diagnostic differentials to explore during intake, and recommended inquiry avenues.
+- recommendation: Formal triage and referral recommendation for human clinical care.
+
+Strict Instructions: Return ONLY valid JSON. No markdown code blocks, no backticks, no text outside the JSON.
 """
 
     response = await model.generate_content_async(prompt)
     import json
     raw = response.text.strip().replace("```json", "").replace("```", "").strip()
-    return json.loads(raw)
+    summary = json.loads(raw)
+
+    # Ensure all clinical fields exist with sensible fallbacks
+    defaults = {
+        "presenting_concern": "Client presented for emotional processing and reflection.",
+        "client_story": "The client engaged in an unhurried dialogue regarding personal stressors and emotional burden.",
+        "emotional_tone": "Self-reflective and seeking emotional regulation.",
+        "mental_status_observations": "Linear thought process with moments of heightened emotional vulnerability.",
+        "longitudinal_trajectory": ["Stage 1: Presenting distress explored", "Stage 2: Coping and grounding evaluated"],
+        "key_themes": ["Emotional Awareness", "Stress Regulation"],
+        "directions_given": ["Diaphragmatic breathing", "Somatic grounding"],
+        "risk_flags": [],
+        "risk_assessment_tier": context.get("final_severity", "Low").capitalize(),
+        "clinician_notes": "Recommend exploring primary stressors during initial clinical intake. Consider CBT or ACT modalities.",
+        "recommendation": "Outpatient therapeutic support recommended for ongoing emotional grounding.",
+    }
+    for k, v in defaults.items():
+        if k not in summary or not summary[k]:
+            summary[k] = v
+
+    return summary
