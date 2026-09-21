@@ -13,6 +13,12 @@ class ChatRequest(BaseModel):
     is_first_message: bool = False
 
 
+class EndSessionRequest(BaseModel):
+    session_id: str
+    topic: Optional[str] = None
+    final_severity: Optional[str] = "low"
+
+
 class MLSignals(BaseModel):
     dominant_emotion: str
     emotion_scores: Dict[str, float]
@@ -23,7 +29,10 @@ class MLSignals(BaseModel):
 
 class ChatResponse(BaseModel):
     response: str
+    reply: Optional[str] = None
     ml_signals: MLSignals
+    detected_emotion: Optional[str] = None
     escalate: bool
     crisis: bool
+    crisis_flag: Optional[bool] = None
     session_id: str

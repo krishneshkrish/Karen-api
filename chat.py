@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from app.api.deps import get_current_user
-from app.models.chat import ChatRequest, ChatResponse, MLSignals
+from app.models.chat import ChatRequest, ChatResponse, MLSignals, EndSessionRequest
 from app.services.emotion_service import analyse_emotion
 from app.services.severity_service import analyse_severity
 from app.services.topic_service import analyse_topic
@@ -87,6 +87,7 @@ async def send_message(
 
     return ChatResponse(
         response=karen_response,
+        reply=karen_response,
         ml_signals=MLSignals(
             dominant_emotion=ml_signals["dominant_emotion"],
             emotion_scores=ml_signals["emotion_scores"],
@@ -94,27 +95,30 @@ async def send_message(
             severity_score=ml_signals["severity_score"],
             topic=ml_signals["topic"],
         ),
+        detected_emotion=ml_signals["dominant_emotion"],
         escalate=ml_signals["escalate"],
         crisis=ml_signals["crisis"],
+        crisis_flag=ml_signals["crisis"],
         session_id=payload.session_id,
     )
 
 
 @router.post("/end-session")
 async def end_session(
-    session_id: str,
-    topic: str | None = None,
-    final_severity: str = "low",
+    payload: EndSessionRequest,
     user_hash: str = Depends(get_current_user),
 ):
     """Marks a session as ended in Supabase. Transcript stays client-side."""
     db = get_supabase()
     from datetime import datetime, timezone
-    db.table("sessions").upsert({
-        "session_id": session_id,
-        "user_hash": user_hash,
-        "ended_at": datetime.now(timezone.utc).isoformat(),
-        "topic": topic,
-        "final_severity": final_severity,
-    }).execute()
-    return {"status": "session ended", "session_id": session_id}
+    try:
+        db.table("sessions").upsert({
+            "session_id": payload.session_id,
+            "user_hash": user_hash,
+            "ended_at": datetime.now(timezone.utc).isoformat(),
+            "topic": payload.topic,
+            "final_severity": payload.final_severity or "low",
+        }).execute()
+    except Exception as e:
+        logger.warning(f"Failed to persist session end: {e}")
+    return {"status": "session ended", "session_id": payload.session_id}
